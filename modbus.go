@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,11 +71,16 @@ func regsToString(regs []uint16) string {
 	for i, r := range regs {
 		binary.BigEndian.PutUint16(buf[i*2:], r)
 	}
+	// Trim null bytes from both ends
+	start := 0
+	for start < len(buf) && buf[start] == 0 {
+		start++
+	}
 	end := len(buf)
-	for end > 0 && buf[end-1] == 0 {
+	for end > start && buf[end-1] == 0 {
 		end--
 	}
-	return string(buf[:end])
+	return strings.TrimSpace(string(buf[start:end]))
 }
 
 func parseInverterBlock(regs []uint16) InverterData {
@@ -209,7 +215,7 @@ func (mb *ModbusBackend) connect() (modbus.Client, *modbus.TCPClientHandler, err
 	return modbus.NewClient(handler), handler, nil
 }
 
-// SunSpec uses 1-based register addresses; goburrow/modbus uses 0-based, hence the -1.
+// readString reads a string from the given SunSpec register address.
 func (mb *ModbusBackend) readString(client modbus.Client, register uint16) (string, error) {
 	results, err := client.ReadHoldingRegisters(register-1, regStringCount)
 	if err != nil {
@@ -242,7 +248,7 @@ func (mb *ModbusBackend) Read() (*InverterData, error) {
 	}
 	defer handler.Close()
 
-	results, err := client.ReadHoldingRegisters(regInverterStart-1, regInverterCount)
+	results, err := client.ReadHoldingRegisters(regInverterStart, regInverterCount)
 	if err != nil {
 		mb.handleFailure()
 		return nil, fmt.Errorf("reading inverter registers: %w", err)
