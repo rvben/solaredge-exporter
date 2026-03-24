@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -51,6 +52,10 @@ func main() {
 	backendFlag := flag.String("backend", envOrDefault("SE_BACKEND", "modbus"), "Backend type: modbus or api")
 	listenFlag := flag.String("listen", envOrDefault("SE_LISTEN", ":2112"), "HTTP listen address")
 	logLevelFlag := flag.String("log-level", envOrDefault("SE_LOG_LEVEL", "info"), "Log level: debug, info, warn, error")
+
+	// Snapshot flags
+	snapshotFile := flag.String("snapshot-file", envOrDefault("SE_SNAPSHOT_FILE", ""), "Path to daily energy snapshot file (enables today/month/year metrics)")
+	timezoneFlag := flag.String("timezone", envOrDefault("TZ", "UTC"), "Timezone for calendar-period energy calculations")
 
 	// Modbus flags (env vars used as defaults, flags take precedence)
 	modbusAddr := flag.String("modbus-address", envOrDefault("SE_MODBUS_ADDRESS", ""), "Modbus TCP address (host:port)")
@@ -110,8 +115,23 @@ func main() {
 	}
 	defer backend.Close()
 
+	// Create snapshot store (optional)
+	var snapshot *SnapshotStore
+	if *snapshotFile != "" {
+		tz, tzErr := time.LoadLocation(*timezoneFlag)
+		if tzErr != nil {
+			logger.Error("invalid timezone", "timezone", *timezoneFlag, "error", tzErr)
+			os.Exit(1)
+		}
+		snapshot, err = NewSnapshotStore(*snapshotFile, tz, logger)
+		if err != nil {
+			logger.Error("failed to initialize snapshot store", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	// Create collector and register
-	collector := NewCollector(backend)
+	collector := NewCollector(backend, snapshot)
 	collector.logger = logger
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collector)

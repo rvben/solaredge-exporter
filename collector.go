@@ -11,8 +11,9 @@ import (
 
 // Collector implements prometheus.Collector for SolarEdge inverter data.
 type Collector struct {
-	backend Backend
-	logger  *slog.Logger
+	backend  Backend
+	snapshot *SnapshotStore
+	logger   *slog.Logger
 
 	// Metric descriptors
 	acPower     *prometheus.Desc
@@ -28,6 +29,12 @@ type Collector struct {
 	reachable   *prometheus.Desc
 	info        *prometheus.Desc
 
+	// Snapshot-derived metrics (nil when snapshot not configured)
+	energyToday *prometheus.Desc
+	energyMonth *prometheus.Desc
+	energyYear  *prometheus.Desc
+	snapshotAge *prometheus.Desc
+
 	scrapeDuration *prometheus.Desc
 	scrapeErrors   prometheus.Counter
 
@@ -36,10 +43,11 @@ type Collector struct {
 	statusLogged bool
 }
 
-func NewCollector(backend Backend) *Collector {
-	return &Collector{
-		backend: backend,
-		logger:  slog.Default(),
+func NewCollector(backend Backend, snapshot *SnapshotStore) *Collector {
+	c := &Collector{
+		backend:  backend,
+		snapshot: snapshot,
+		logger:   slog.Default(),
 		acPower: prometheus.NewDesc("solaredge_ac_power_watts",
 			"AC power output in watts", nil, nil),
 		dcPower: prometheus.NewDesc("solaredge_dc_power_watts",
@@ -72,6 +80,19 @@ func NewCollector(backend Backend) *Collector {
 			Help: "Number of failed backend reads",
 		}),
 	}
+
+	if snapshot != nil {
+		c.energyToday = prometheus.NewDesc("solaredge_energy_today_wh",
+			"Energy produced since midnight local time in watt-hours", nil, nil)
+		c.energyMonth = prometheus.NewDesc("solaredge_energy_month_wh",
+			"Energy produced since the 1st of the current month in watt-hours", nil, nil)
+		c.energyYear = prometheus.NewDesc("solaredge_energy_year_wh",
+			"Energy produced since January 1st in watt-hours", nil, nil)
+		c.snapshotAge = prometheus.NewDesc("solaredge_snapshot_age_seconds",
+			"Time since the most recent daily snapshot was recorded", nil, nil)
+	}
+
+	return c
 }
 
 func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
@@ -89,6 +110,13 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.info
 	ch <- c.scrapeDuration
 	c.scrapeErrors.Describe(ch)
+
+	if c.snapshot != nil {
+		ch <- c.energyToday
+		ch <- c.energyMonth
+		ch <- c.energyYear
+		ch <- c.snapshotAge
+	}
 }
 
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
@@ -148,6 +176,23 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	if data.Manufacturer != "" {
 		ch <- prometheus.MustNewConstMetric(c.info, prometheus.GaugeValue, 1,
 			data.Manufacturer, data.Model, data.Serial, data.Version)
+	}
+
+	// Snapshot-derived metrics
+	if c.snapshot != nil && !math.IsNaN(data.EnergyTotal) {
+		c.snapshot.Record(data.EnergyTotal)
+
+		if v, ok := c.snapshot.EnergyToday(data.EnergyTotal); ok {
+			ch <- prometheus.MustNewConstMetric(c.energyToday, prometheus.GaugeValue, v)
+		}
+		if v, ok := c.snapshot.EnergyMonth(data.EnergyTotal); ok {
+			ch <- prometheus.MustNewConstMetric(c.energyMonth, prometheus.GaugeValue, v)
+		}
+		if v, ok := c.snapshot.EnergyYear(data.EnergyTotal); ok {
+			ch <- prometheus.MustNewConstMetric(c.energyYear, prometheus.GaugeValue, v)
+		}
+
+		ch <- prometheus.MustNewConstMetric(c.snapshotAge, prometheus.GaugeValue, c.snapshot.SnapshotAge().Seconds())
 	}
 
 	c.logStatusTransition(data.Status)

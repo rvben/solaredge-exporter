@@ -62,7 +62,7 @@ func TestCollectorProducing(t *testing.T) {
 		},
 	}
 
-	c := NewCollector(backend)
+	c := NewCollector(backend, nil)
 	output := collectMetrics(t, c)
 
 	expected := []string{
@@ -100,7 +100,7 @@ func TestCollectorSentinelOmission(t *testing.T) {
 		},
 	}
 
-	c := NewCollector(backend)
+	c := NewCollector(backend, nil)
 	output := collectMetrics(t, c)
 
 	// These should NOT appear (NaN = sentinel = omit)
@@ -128,7 +128,7 @@ func TestCollectorUnreachable(t *testing.T) {
 		data: &InverterData{Reachable: false},
 	}
 
-	c := NewCollector(backend)
+	c := NewCollector(backend, nil)
 	output := collectMetrics(t, c)
 
 	if !strings.Contains(output, "solaredge_inverter_reachable 0") {
