@@ -1,8 +1,8 @@
 BINARY := solaredge-exporter
-VERSION := 0.1.0
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
 
-.PHONY: build test lint docker run clean
+.PHONY: build test lint docker run clean release-patch release-minor release-major
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) .
@@ -21,3 +21,12 @@ run: build
 
 clean:
 	rm -f $(BINARY)
+
+release-patch:
+	vership bump patch
+
+release-minor:
+	vership bump minor
+
+release-major:
+	vership bump major
