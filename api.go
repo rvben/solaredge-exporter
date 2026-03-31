@@ -20,6 +20,9 @@ type apiOverviewResponse struct {
 		LifeTimeData struct {
 			Energy float64 `json:"energy"`
 		} `json:"lifeTimeData"`
+		LastDayData struct {
+			Energy float64 `json:"energy"`
+		} `json:"lastDayData"`
 	} `json:"overview"`
 }
 
@@ -34,6 +37,7 @@ func (r *apiOverviewResponse) toInverterData() InverterData {
 		DCCurrent:   math.NaN(),
 		Temperature: math.NaN(),
 		EnergyTotal: r.Overview.LifeTimeData.Energy,
+		EnergyToday: r.Overview.LastDayData.Energy,
 		Status:      4, // API doesn't expose SunSpec status; assume producing if responding
 		Reachable:   true,
 	}

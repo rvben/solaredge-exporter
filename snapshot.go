@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"os"
 	"sort"
 	"sync"
@@ -67,8 +68,12 @@ func loadSnapshotFile(path string, logger *slog.Logger) (map[string]float64, err
 }
 
 // Record saves a snapshot for today if one doesn't exist yet.
+// energyToday is today's production in Wh as reported by the API; pass NaN if unavailable.
+// When energyToday is available and today's snapshot is missing (e.g. mid-day restart),
+// the midnight baseline is back-calculated as energyTotal - energyToday rather than
+// recording the current total, which would produce today=0 until the next calendar day.
 // Returns false if the value was rejected (invalid or counter reset).
-func (s *SnapshotStore) Record(energyTotal float64) bool {
+func (s *SnapshotStore) Record(energyTotal, energyToday float64) bool {
 	if energyTotal <= 0 {
 		return false
 	}
@@ -90,7 +95,14 @@ func (s *SnapshotStore) Record(energyTotal float64) bool {
 		return true
 	}
 
-	s.data[today] = energyTotal
+	// When energyToday is available, back-calculate the midnight baseline so that
+	// a mid-day restart produces the correct today value immediately.
+	baseline := energyTotal
+	if !math.IsNaN(energyToday) && energyToday >= 0 {
+		baseline = energyTotal - energyToday
+	}
+
+	s.data[today] = baseline
 
 	// Prune old entries
 	s.pruneOldEntries()
@@ -107,7 +119,11 @@ func (s *SnapshotStore) Record(energyTotal float64) bool {
 		return false
 	}
 
-	s.logger.Info("daily snapshot recorded", "date", today, "energy_total_wh", energyTotal)
+	if baseline != energyTotal {
+		s.logger.Info("daily snapshot recorded (back-calculated from API today)", "date", today, "baseline_wh", baseline, "energy_today_wh", energyToday)
+	} else {
+		s.logger.Info("daily snapshot recorded", "date", today, "energy_total_wh", energyTotal)
+	}
 	return true
 }
 

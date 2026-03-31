@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,8 +39,8 @@ func TestSnapshotStoreRecordAndRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Record a snapshot
-	ok := store.Record(22950000)
+	// Record a snapshot (no energyToday available)
+	ok := store.Record(22950000, math.NaN())
 	if !ok {
 		t.Fatal("Record returned false")
 	}
@@ -63,7 +64,7 @@ func TestSnapshotStoreRecordAndRead(t *testing.T) {
 	}
 
 	// Second Record on same day should not overwrite
-	ok = store.Record(22953500)
+	ok = store.Record(22953500, math.NaN())
 	if !ok {
 		t.Fatal("Record returned false on second call")
 	}
@@ -80,7 +81,7 @@ func TestSnapshotStorePersistence(t *testing.T) {
 
 	// Create and record
 	store1, _ := NewSnapshotStore(path, tz, testLogger())
-	store1.Record(22950000)
+	store1.Record(22950000, math.NaN())
 
 	// Reload from file
 	store2, err := NewSnapshotStore(path, tz, testLogger())
@@ -119,10 +120,10 @@ func TestSnapshotStoreCounterReset(t *testing.T) {
 	tz := time.UTC
 
 	store, _ := NewSnapshotStore(path, tz, testLogger())
-	store.Record(22950000)
+	store.Record(22950000, math.NaN())
 
 	// Simulate counter reset (inverter replacement)
-	ok := store.Record(500)
+	ok := store.Record(500, math.NaN())
 	if !ok {
 		t.Fatal("Record returned false after counter reset")
 	}
@@ -143,10 +144,10 @@ func TestSnapshotStoreRejectsZero(t *testing.T) {
 
 	store, _ := NewSnapshotStore(path, time.UTC, testLogger())
 
-	if store.Record(0) {
+	if store.Record(0, math.NaN()) {
 		t.Error("should reject zero value")
 	}
-	if store.Record(-100) {
+	if store.Record(-100, math.NaN()) {
 		t.Error("should reject negative value")
 	}
 }
@@ -156,7 +157,7 @@ func TestSnapshotStoreNegativeDelta(t *testing.T) {
 	path := filepath.Join(dir, "snapshots.json")
 
 	store, _ := NewSnapshotStore(path, time.UTC, testLogger())
-	store.Record(22950000)
+	store.Record(22950000, math.NaN())
 
 	// If current < snapshot (small glitch, not full reset), return 0
 	today, ok := store.EnergyToday(22949999)
@@ -228,7 +229,7 @@ func TestSnapshotStoreAtomicWrite(t *testing.T) {
 	path := filepath.Join(dir, "snapshots.json")
 
 	store, _ := NewSnapshotStore(path, time.UTC, testLogger())
-	store.Record(22950000)
+	store.Record(22950000, math.NaN())
 
 	// Temp file should not exist after successful write
 	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
@@ -267,7 +268,7 @@ func TestSnapshotStorePruning(t *testing.T) {
 	store, _ := NewSnapshotStore(path, time.UTC, testLogger())
 
 	// Recording a new value triggers pruning (today doesn't exist yet)
-	store.Record(22950000)
+	store.Record(22950000, math.NaN())
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -306,9 +307,81 @@ func TestSnapshotStoreSnapshotAge(t *testing.T) {
 	}
 
 	// After recording
-	store.Record(22950000)
+	store.Record(22950000, math.NaN())
 	age = store.SnapshotAge()
 	if age > 24*time.Hour {
 		t.Errorf("age = %v, should be < 24h for today's snapshot", age)
+	}
+}
+
+// TestSnapshotStoreMidDayRestart verifies that when the exporter restarts mid-day
+// and the API provides today's energy, the baseline is back-calculated correctly
+// so EnergyToday reflects actual production rather than returning 0.
+func TestSnapshotStoreMidDayRestart(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "snapshots.json")
+	tz := time.UTC
+
+	store, err := NewSnapshotStore(path, tz, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate mid-day restart: lifetime total is 23,005,766 Wh,
+	// API reports today produced 18,900 Wh so far.
+	energyTotal := 23005766.0
+	energyToday := 18900.0
+
+	ok := store.Record(energyTotal, energyToday)
+	if !ok {
+		t.Fatal("Record returned false")
+	}
+
+	// EnergyToday should reflect what the API reported, not 0
+	got, ok := store.EnergyToday(energyTotal)
+	if !ok {
+		t.Fatal("EnergyToday returned not-ok")
+	}
+	if got != energyToday {
+		t.Errorf("EnergyToday = %f, want %f", got, energyToday)
+	}
+
+	// The stored baseline should be energyTotal - energyToday
+	wantBaseline := energyTotal - energyToday
+	store.mu.Lock()
+	today := time.Now().In(tz).Format("2006-01-02")
+	gotBaseline := store.data[today]
+	store.mu.Unlock()
+	if gotBaseline != wantBaseline {
+		t.Errorf("stored baseline = %f, want %f", gotBaseline, wantBaseline)
+	}
+
+	// As the day continues and production increases, EnergyToday should increase too
+	got, _ = store.EnergyToday(energyTotal + 5000)
+	if got != energyToday+5000 {
+		t.Errorf("EnergyToday after more production = %f, want %f", got, energyToday+5000)
+	}
+}
+
+// TestSnapshotStoreSecondRecordDoesNotOverwriteMidDay verifies that a second
+// Record call on the same day (normal polling after mid-day restart) does not
+// overwrite the back-calculated baseline.
+func TestSnapshotStoreSecondRecordDoesNotOverwriteMidDay(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "snapshots.json")
+	tz := time.UTC
+
+	store, _ := NewSnapshotStore(path, tz, testLogger())
+
+	// First Record: mid-day restart with API energyToday
+	store.Record(23005766, 18900)
+
+	// Second Record: next polling tick, energyToday is now higher
+	store.Record(23006000, 19134)
+
+	// Baseline should still be from the first Record
+	got, _ := store.EnergyToday(23005766)
+	if got != 18900 {
+		t.Errorf("EnergyToday = %f, want 18900 (baseline must not change)", got)
 	}
 }

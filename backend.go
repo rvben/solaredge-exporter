@@ -12,8 +12,9 @@ type InverterData struct {
 	DCVoltage   float64
 	DCCurrent   float64
 	Temperature float64
-	EnergyTotal float64 // lifetime Wh
-	Status      uint16  // SunSpec status enum (1-7)
+	EnergyTotal  float64 // lifetime Wh
+	EnergyToday  float64 // today's Wh from API; NaN if not available
+	Status       uint16  // SunSpec status enum (1-7)
 	Reachable   bool
 	Manufacturer string
 	Model        string

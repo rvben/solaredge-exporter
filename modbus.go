@@ -86,6 +86,7 @@ func regsToString(regs []uint16) string {
 func parseInverterBlock(regs []uint16) InverterData {
 	var data InverterData
 	data.Reachable = true
+	data.EnergyToday = math.NaN() // not available via Modbus
 
 	if isSentinelU16(regs[offACCurrent]) {
 		data.ACCurrent = math.NaN()

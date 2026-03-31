@@ -180,7 +180,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 
 	// Snapshot-derived metrics
 	if c.snapshot != nil && !math.IsNaN(data.EnergyTotal) {
-		c.snapshot.Record(data.EnergyTotal)
+		c.snapshot.Record(data.EnergyTotal, data.EnergyToday)
 
 		if v, ok := c.snapshot.EnergyToday(data.EnergyTotal); ok {
 			ch <- prometheus.MustNewConstMetric(c.energyToday, prometheus.GaugeValue, v)
