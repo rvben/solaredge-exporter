@@ -1,7 +1,5 @@
 package main
 
-import "math"
-
 // InverterData holds all metrics read from a SolarEdge inverter.
 type InverterData struct {
 	ACPower     float64
@@ -28,7 +26,3 @@ type Backend interface {
 	Close() error
 }
 
-// isNaN returns true if the value is NaN (used for SunSpec sentinel values).
-func isNaN(f float64) bool {
-	return math.IsNaN(f)
-}

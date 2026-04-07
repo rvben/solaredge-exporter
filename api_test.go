@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func TestParseAPIResponse(t *testing.T) {
 	raw := `{
 		"overview": {
@@ -45,8 +52,7 @@ func TestAPIBackendPolling(t *testing.T) {
 		mu.Lock()
 		callCount++
 		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		writeJSON(w, map[string]any{
 			"overview": map[string]any{
 				"lastUpdateTime": "2026-03-23 15:00:00",
 				"currentPower":   map[string]any{"power": 1000.0},
@@ -91,8 +97,7 @@ func TestAPIBackend429Handling(t *testing.T) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		writeJSON(w, map[string]any{
 			"overview": map[string]any{
 				"currentPower": map[string]any{"power": 1000.0},
 				"lifeTimeData": map[string]any{"energy": 50000.0},
@@ -133,8 +138,7 @@ func TestAPIBackendConsecutive429sDoNotAccumulate(t *testing.T) {
 		mu.Unlock()
 		if count == 1 {
 			// First call succeeds (startup)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{
+			writeJSON(w, map[string]any{
 				"overview": map[string]any{
 					"currentPower": map[string]any{"power": 1000.0},
 					"lifeTimeData": map[string]any{"energy": 50000.0},

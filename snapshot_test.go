@@ -103,7 +103,9 @@ func TestSnapshotStoreCorruptFile(t *testing.T) {
 	path := filepath.Join(dir, "snapshots.json")
 
 	// Write corrupt JSON
-	os.WriteFile(path, []byte("{invalid json"), 0644)
+	if err := os.WriteFile(path, []byte("{invalid json"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	store, err := NewSnapshotStore(path, time.UTC, testLogger())
 	if err != nil {
@@ -183,8 +185,13 @@ func TestSnapshotStoreMonthAndYear(t *testing.T) {
 		firstOfMonth: 22800000,
 		midMonth:     22950000,
 	}
-	b, _ := json.Marshal(data)
-	os.WriteFile(path, b, 0644)
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	store, _ := NewSnapshotStore(path, time.UTC, testLogger())
 
@@ -216,8 +223,13 @@ func TestSnapshotStoreMissingMonthStart(t *testing.T) {
 	data := map[string]float64{
 		now.AddDate(0, 0, -3).Format("2006-01-02"): 22940000,
 	}
-	b, _ := json.Marshal(data)
-	os.WriteFile(path, b, 0644)
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	store, _ := NewSnapshotStore(path, time.UTC, testLogger())
 
