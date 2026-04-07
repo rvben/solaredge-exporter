@@ -177,7 +177,7 @@ func NewModbusBackend(address string, deviceID byte, timeout time.Duration, logg
 	if err != nil {
 		return nil, fmt.Errorf("connecting to inverter: %w", err)
 	}
-	defer handler.Close()
+	defer func() { _ = handler.Close() }()
 
 	mb.manufacturer, err = mb.readString(client, regManufacturer)
 	if err != nil {
@@ -247,7 +247,7 @@ func (mb *ModbusBackend) Read() (*InverterData, error) {
 		mb.handleFailure()
 		return nil, fmt.Errorf("connecting to inverter: %w", err)
 	}
-	defer handler.Close()
+	defer func() { _ = handler.Close() }()
 
 	results, err := client.ReadHoldingRegisters(regInverterStart, regInverterCount)
 	if err != nil {

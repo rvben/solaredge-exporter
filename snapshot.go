@@ -56,8 +56,8 @@ func loadSnapshotFile(path string, logger *slog.Logger) (map[string]float64, err
 		return nil, err
 	}
 
-	// Clean up stale temp file from interrupted writes
-	os.Remove(path + ".tmp")
+	// Clean up stale temp file from interrupted writes (error irrelevant if missing)
+	_ = os.Remove(path + ".tmp")
 
 	var data map[string]float64
 	if err := json.Unmarshal(b, &data); err != nil {
@@ -297,10 +297,12 @@ func atomicWriteJSON(path string, data map[string]float64) error {
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
 
 	return os.Rename(tmp, path)
 }
