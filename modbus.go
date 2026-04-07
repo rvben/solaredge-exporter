@@ -43,7 +43,7 @@ const (
 	regSerial       = 40053
 	regStringCount  = 16
 
-	cooldownDuration = 60 * time.Second
+	cooldownDuration = 90 * time.Second
 )
 
 func applyScaleFactor(raw uint16, sf int16) float64 {

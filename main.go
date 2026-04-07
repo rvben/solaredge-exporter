@@ -60,7 +60,7 @@ func main() {
 	// Modbus flags (env vars used as defaults, flags take precedence)
 	modbusAddr := flag.String("modbus-address", envOrDefault("SE_MODBUS_ADDRESS", ""), "Modbus TCP address (host:port)")
 	modbusDevID := flag.Int("modbus-device-id", envOrDefaultInt("SE_MODBUS_DEVICE_ID", 1), "Modbus device ID")
-	modbusTimeout := flag.Duration("modbus-timeout", envOrDefaultDuration("SE_MODBUS_TIMEOUT", 5*time.Second), "Modbus read timeout")
+	modbusTimeout := flag.Duration("modbus-timeout", envOrDefaultDuration("SE_MODBUS_TIMEOUT", 3*time.Second), "Modbus read timeout")
 
 	// API flags
 	apiKey := flag.String("api-key", envOrDefault("SE_API_KEY", ""), "SolarEdge API key")
