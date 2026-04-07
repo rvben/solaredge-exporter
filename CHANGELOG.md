@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+
+## [0.3.3](https://github.com/rvben/solaredge-exporter/compare/v0.3.2...v0.3.3) - 2026-04-07
+
+### Performance
+
+- **modbus**: reduce timeout to 3s and increase cooldown to 90s ([f679e8c](https://github.com/rvben/solaredge-exporter/commit/f679e8c10bcb95af7880f17d15d111107dd51128))
+
 ## [0.2.0](https://github.com/rvben/solaredge-exporter/compare/v0.1.0...v0.2.0) - 2026-03-31
 
 ### Fixed
