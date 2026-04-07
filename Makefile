@@ -14,7 +14,7 @@ lint:
 	golangci-lint run ./...
 
 docker:
-	docker build -t $(BINARY):$(VERSION) .
+	docker build --build-arg VERSION=$(VERSION) -t $(BINARY):$(VERSION) .
 
 run: build
 	./$(BINARY) $(ARGS)

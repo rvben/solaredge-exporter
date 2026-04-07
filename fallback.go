@@ -2,6 +2,7 @@ package main
 
 import (
 	"log/slog"
+	"math"
 	"sync"
 )
 
@@ -30,6 +31,10 @@ func NewFallbackBackend(primary *ModbusBackend, secondary *APIBackend, logger *s
 
 // Read tries Modbus first. If Modbus returns unreachable (or an error), it
 // returns the latest cached data from the API backend instead.
+//
+// When Modbus is active, EnergyToday is enriched from the API cache if Modbus
+// doesn't provide it (Modbus has no EnergyToday register). This ensures the
+// snapshot store can back-calculate the midnight baseline correctly on restart.
 func (f *FallbackBackend) Read() (*InverterData, error) {
 	data, err := f.primary.Read()
 	if err == nil && data.Reachable {
@@ -41,6 +46,15 @@ func (f *FallbackBackend) Read() (*InverterData, error) {
 		if wasUsingFallback {
 			f.logger.Info("modbus recovered, switched back from API fallback")
 		}
+
+		// Modbus has no EnergyToday register. Inject it from the API cache so
+		// the snapshot store can back-calculate the midnight baseline correctly.
+		if math.IsNaN(data.EnergyToday) {
+			if apiData, apiErr := f.secondary.Read(); apiErr == nil && apiData.Reachable && !math.IsNaN(apiData.EnergyToday) {
+				data.EnergyToday = apiData.EnergyToday
+			}
+		}
+
 		return data, nil
 	}
 
