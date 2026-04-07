@@ -135,7 +135,7 @@ func main() {
 		logger.Error("failed to initialize backend", "error", err)
 		os.Exit(1)
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	// Create snapshot store (optional)
 	var snapshot *SnapshotStore
@@ -172,7 +172,7 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprintf(w, "solaredge-exporter %s\n\n/metrics - Prometheus metrics\n/health  - Health check\n", version)
+		_, _ = fmt.Fprintf(w, "solaredge-exporter %s\n\n/metrics - Prometheus metrics\n/health  - Health check\n", version)
 	})
 
 	server := &http.Server{

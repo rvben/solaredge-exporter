@@ -83,6 +83,8 @@ func (f *FallbackBackend) IsUsingFallback() bool {
 }
 
 func (f *FallbackBackend) Close() error {
-	f.primary.Close()
+	if err := f.primary.Close(); err != nil {
+		return err
+	}
 	return f.secondary.Close()
 }
