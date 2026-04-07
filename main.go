@@ -105,6 +105,28 @@ func main() {
 			os.Exit(1)
 		}
 		backend, err = NewAPIBackend(ctx, defaultAPIBaseURL, *apiKey, *siteID, *apiInterval, logger)
+	case "fallback":
+		if *modbusAddr == "" {
+			logger.Error("--modbus-address is required for fallback backend")
+			os.Exit(1)
+		}
+		if *apiKey == "" || *siteID == "" {
+			logger.Error("--api-key and --site-id are required for fallback backend")
+			os.Exit(1)
+		}
+		var mb *ModbusBackend
+		mb, err = NewModbusBackend(*modbusAddr, byte(*modbusDevID), *modbusTimeout, logger)
+		if err != nil {
+			logger.Error("failed to initialize modbus backend", "error", err)
+			os.Exit(1)
+		}
+		var ab *APIBackend
+		ab, err = NewAPIBackend(ctx, defaultAPIBaseURL, *apiKey, *siteID, *apiInterval, logger)
+		if err != nil {
+			logger.Error("failed to initialize API fallback backend", "error", err)
+			os.Exit(1)
+		}
+		backend = NewFallbackBackend(mb, ab, logger)
 	default:
 		logger.Error("unknown backend", "backend", *backendFlag)
 		os.Exit(1)

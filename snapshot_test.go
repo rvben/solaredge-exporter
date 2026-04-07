@@ -173,11 +173,15 @@ func TestSnapshotStoreMonthAndYear(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "snapshots.json")
 
-	// Pre-seed with historical data
+	now := time.Now().UTC()
+	jan1 := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	midMonth := time.Date(now.Year(), now.Month(), 10, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
 	data := map[string]float64{
-		"2026-01-01": 22000000,
-		"2026-03-01": 22800000,
-		"2026-03-24": 22950000,
+		jan1:         22000000,
+		firstOfMonth: 22800000,
+		midMonth:     22950000,
 	}
 	b, _ := json.Marshal(data)
 	os.WriteFile(path, b, 0644)

@@ -35,8 +35,9 @@ type Collector struct {
 	energyYear  *prometheus.Desc
 	snapshotAge *prometheus.Desc
 
-	scrapeDuration *prometheus.Desc
-	scrapeErrors   prometheus.Counter
+	scrapeDuration  *prometheus.Desc
+	scrapeErrors    prometheus.Counter
+	fallbackActive  *prometheus.Desc // nil when not using FallbackBackend
 
 	mu           sync.Mutex
 	lastStatus   uint16
@@ -81,6 +82,11 @@ func NewCollector(backend Backend, snapshot *SnapshotStore) *Collector {
 		}),
 	}
 
+	if _, ok := backend.(interface{ IsUsingFallback() bool }); ok {
+		c.fallbackActive = prometheus.NewDesc("solaredge_fallback_active",
+			"1 when the API fallback is in use (Modbus unreachable), 0 when Modbus is primary", nil, nil)
+	}
+
 	if snapshot != nil {
 		c.energyToday = prometheus.NewDesc("solaredge_energy_today_wh",
 			"Energy produced since midnight local time in watt-hours", nil, nil)
@@ -111,6 +117,9 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.scrapeDuration
 	c.scrapeErrors.Describe(ch)
 
+	if c.fallbackActive != nil {
+		ch <- c.fallbackActive
+	}
 	if c.snapshot != nil {
 		ch <- c.energyToday
 		ch <- c.energyMonth
@@ -141,6 +150,16 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	ch <- prometheus.MustNewConstMetric(c.reachable, prometheus.GaugeValue, 1)
+
+	if c.fallbackActive != nil {
+		if fb, ok := c.backend.(interface{ IsUsingFallback() bool }); ok {
+			val := 0.0
+			if fb.IsUsingFallback() {
+				val = 1.0
+			}
+			ch <- prometheus.MustNewConstMetric(c.fallbackActive, prometheus.GaugeValue, val)
+		}
+	}
 
 	// Only emit metrics that are not NaN (SunSpec sentinel)
 	if !math.IsNaN(data.ACPower) {
