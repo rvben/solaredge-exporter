@@ -6,22 +6,22 @@ import (
 	"sync"
 )
 
-// FallbackBackend uses Modbus as the primary backend and falls back to the
-// SolarEdge cloud API when the inverter is unreachable via Modbus.
-// It switches back to Modbus automatically as soon as it becomes reachable again.
+// FallbackBackend uses a primary backend (Modbus) and falls back to a secondary
+// backend (API) when the primary is unreachable. It switches back to the primary
+// automatically as soon as it becomes reachable again.
 //
-// Modbus already implements its own 60-second cooldown on failure, so no
+// ModbusBackend already implements its own 60-second cooldown on failure, so no
 // connection-timeout penalty is paid on every scrape during a failure window.
 type FallbackBackend struct {
-	primary   *ModbusBackend
-	secondary *APIBackend
+	primary   Backend
+	secondary Backend
 	logger    *slog.Logger
 
 	mu            sync.Mutex
 	usingFallback bool
 }
 
-func NewFallbackBackend(primary *ModbusBackend, secondary *APIBackend, logger *slog.Logger) *FallbackBackend {
+func NewFallbackBackend(primary, secondary Backend, logger *slog.Logger) *FallbackBackend {
 	return &FallbackBackend{
 		primary:   primary,
 		secondary: secondary,
