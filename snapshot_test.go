@@ -278,8 +278,13 @@ func TestSnapshotStorePruning(t *testing.T) {
 		"2025-06-01": 21000000, // 1st of month — should be kept
 		"2025-06-15": 21100000, // Old daily — should be pruned
 	}
-	b, _ := json.Marshal(data)
-	os.WriteFile(path, b, 0644)
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	store, _ := NewSnapshotStore(path, time.UTC, testLogger())
 
