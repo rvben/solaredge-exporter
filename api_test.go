@@ -69,7 +69,7 @@ func TestAPIBackendPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAPIBackend failed: %v", err)
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	data, err := backend.Read()
 	if err != nil {
@@ -113,7 +113,7 @@ func TestAPIBackend429Handling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAPIBackend failed: %v", err)
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	// After 429, Read() should still return cached data
 	time.Sleep(150 * time.Millisecond)
@@ -159,7 +159,7 @@ func TestAPIBackendConsecutive429sDoNotAccumulate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAPIBackend failed: %v", err)
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	// Wait for at least 3 poll cycles (2 consecutive 429s)
 	time.Sleep(400 * time.Millisecond)
