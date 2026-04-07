@@ -1,6 +1,6 @@
 module github.com/rvben/solaredge-exporter
 
-go 1.26.1
+go 1.24.0
 
 require (
 	github.com/goburrow/modbus v0.1.0
