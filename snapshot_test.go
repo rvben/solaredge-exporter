@@ -384,6 +384,63 @@ func TestSnapshotStoreMidDayRestart(t *testing.T) {
 	}
 }
 
+// TestSnapshotStoreMidnightRolloverIgnoresStaleEnergyToday verifies that at
+// the routine midnight rollover (yesterday's snapshot exists), the back-calc
+// is skipped because the API's lastDayData.energy still reflects yesterday's
+// full production at that moment — the inverter hasn't transmitted for the
+// new day yet (it's nighttime). Using it would set the baseline one day too
+// early and inflate today/month metrics by yesterday's full production.
+func TestSnapshotStoreMidnightRolloverIgnoresStaleEnergyToday(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "snapshots.json")
+	tz := time.UTC
+
+	// Seed yesterday's snapshot — simulates a normally-running exporter that
+	// has just crossed midnight.
+	yesterday := time.Now().In(tz).AddDate(0, 0, -1).Format("2006-01-02")
+	yesterdayBaseline := 23693156.0
+	yesterdayProduction := 8062.0
+	endOfYesterday := yesterdayBaseline + yesterdayProduction
+
+	seed := map[string]float64{yesterday: yesterdayBaseline}
+	b, err := json.Marshal(seed)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	store, err := NewSnapshotStore(path, tz, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// At 00:00:04 the API returns the inverter's last-known reading from
+	// before midnight: lifeTime = end of yesterday, lastDayData = yesterday's
+	// full production. The exporter must NOT back-calculate from this.
+	store.Record(endOfYesterday, yesterdayProduction)
+
+	today := time.Now().In(tz).Format("2006-01-02")
+	store.mu.Lock()
+	gotBaseline := store.data[today]
+	store.mu.Unlock()
+	if gotBaseline != endOfYesterday {
+		t.Errorf("baseline = %f, want %f (= current lifetime). "+
+			"Stale energyToday from API leaked into baseline.",
+			gotBaseline, endOfYesterday)
+	}
+
+	// Verify EnergyToday is ~0 right after midnight rollover.
+	got, ok := store.EnergyToday(endOfYesterday)
+	if !ok {
+		t.Fatal("EnergyToday returned not-ok")
+	}
+	if got != 0 {
+		t.Errorf("EnergyToday = %f, want 0 at midnight rollover", got)
+	}
+}
+
 // TestSnapshotStoreSecondRecordDoesNotOverwriteMidDay verifies that a second
 // Record call on the same day (normal polling after mid-day restart) does not
 // overwrite the back-calculated baseline.

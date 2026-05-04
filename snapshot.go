@@ -69,9 +69,13 @@ func loadSnapshotFile(path string, logger *slog.Logger) (map[string]float64, err
 
 // Record saves a snapshot for today if one doesn't exist yet.
 // energyToday is today's production in Wh as reported by the API; pass NaN if unavailable.
-// When energyToday is available and today's snapshot is missing (e.g. mid-day restart),
+// When energyToday is available and there is no recent snapshot (cold start mid-day),
 // the midnight baseline is back-calculated as energyTotal - energyToday rather than
 // recording the current total, which would produce today=0 until the next calendar day.
+// At a routine midnight rollover (yesterday's snapshot exists) the back-calc is skipped
+// because the API's lastDayData.energy at 00:00 still reflects yesterday's full
+// production — the inverter typically hasn't transmitted for the new day yet — so
+// trusting it would set the baseline one day too early.
 // Returns false if the value was rejected (invalid or counter reset).
 func (s *SnapshotStore) Record(energyTotal, energyToday float64) bool {
 	if energyTotal <= 0 {
@@ -89,16 +93,22 @@ func (s *SnapshotStore) Record(energyTotal, energyToday float64) bool {
 	}
 	s.lastKnownGood = energyTotal
 
-	today := time.Now().In(s.tz).Format("2006-01-02")
+	now := time.Now().In(s.tz)
+	today := now.Format("2006-01-02")
 	if _, exists := s.data[today]; exists {
 		s.mu.Unlock()
 		return true
 	}
 
-	// When energyToday is available, back-calculate the midnight baseline so that
-	// a mid-day restart produces the correct today value immediately.
+	// Back-calculate the baseline only on a true cold start (no snapshot for
+	// yesterday). On a routine midnight rollover the API's energyToday still
+	// reflects yesterday's full production, so using it would shift the
+	// baseline one day earlier and inflate today/month metrics.
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	_, hasYesterday := s.data[yesterday]
+
 	baseline := energyTotal
-	if !math.IsNaN(energyToday) && energyToday >= 0 {
+	if !hasYesterday && !math.IsNaN(energyToday) && energyToday >= 0 {
 		baseline = energyTotal - energyToday
 	}
 
