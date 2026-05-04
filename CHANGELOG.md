@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+
+## [0.3.4](https://github.com/rvben/solaredge-exporter/compare/v0.3.3...v0.3.4) - 2026-05-04
+
+### Fixed
+
+- **snapshot**: skip back-calc at midnight rollover ([8f25344](https://github.com/rvben/solaredge-exporter/commit/8f25344ed1bbcd362d16e5afd379ba2a412fe9ed))
+
 ## [0.3.3](https://github.com/rvben/solaredge-exporter/compare/v0.3.2...v0.3.3) - 2026-04-07
 
 ### Performance
