@@ -43,7 +43,8 @@ const (
 	regSerial       = 40053
 	regStringCount  = 16
 
-	cooldownDuration = 90 * time.Second
+	initialRetryDelay = 15 * time.Second
+	maxRetryDelay     = 90 * time.Second
 )
 
 func applyScaleFactor(raw uint16, sf int16) float64 {
@@ -160,6 +161,7 @@ type ModbusBackend struct {
 
 	mu            sync.Mutex
 	lastFailure   time.Time
+	retryDelay    time.Duration
 	cachedFailure bool
 	wasReachable  bool
 }
@@ -236,7 +238,7 @@ func bytesToUint16(data []byte) []uint16 {
 
 func (mb *ModbusBackend) Read() (*InverterData, error) {
 	mb.mu.Lock()
-	if mb.cachedFailure && time.Since(mb.lastFailure) < cooldownDuration {
+	if mb.cachedFailure && time.Since(mb.lastFailure) < mb.retryDelay {
 		mb.mu.Unlock()
 		return &InverterData{Reachable: false}, nil
 	}
@@ -275,6 +277,11 @@ func (mb *ModbusBackend) handleFailure() {
 	} else {
 		mb.logger.Debug("inverter still unreachable")
 	}
+	if mb.retryDelay == 0 {
+		mb.retryDelay = initialRetryDelay
+	} else {
+		mb.retryDelay = min(mb.retryDelay*2, maxRetryDelay)
+	}
 	mb.cachedFailure = true
 	mb.lastFailure = time.Now()
 }
@@ -287,6 +294,7 @@ func (mb *ModbusBackend) handleSuccess() {
 	}
 	mb.wasReachable = true
 	mb.cachedFailure = false
+	mb.retryDelay = 0
 }
 
 func (mb *ModbusBackend) Close() error {

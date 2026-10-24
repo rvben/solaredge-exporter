@@ -10,7 +10,7 @@ import (
 // backend (API) when the primary is unreachable. It switches back to the primary
 // automatically as soon as it becomes reachable again.
 //
-// ModbusBackend already implements its own 60-second cooldown on failure, so no
+// ModbusBackend already implements its own bounded retry backoff on failure, so no
 // connection-timeout penalty is paid on every scrape during a failure window.
 type FallbackBackend struct {
 	primary   Backend

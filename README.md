@@ -65,6 +65,8 @@ All options can be set via CLI flags or environment variables. Flags take preced
 
 ### Modbus Backend
 
+After a failed local read, retries wait 15, 30, 60, then at most 90 seconds. A successful read resets this backoff. Retries happen on the next scrape after the delay expires; no background polling is added.
+
 | Flag | Env Var | Default | Description |
 |------|---------|---------|-------------|
 | `--modbus-address` | `SE_MODBUS_ADDRESS` | *(required)* | Inverter address (`host:port`) |
