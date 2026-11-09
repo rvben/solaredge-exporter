@@ -159,6 +159,9 @@ type ModbusBackend struct {
 	serial       string
 	version      string
 
+	readMu        sync.Mutex // serialize full transactions across concurrent HTTP scrapes
+	lastRead      time.Time
+	lastData      *InverterData
 	mu            sync.Mutex
 	lastFailure   time.Time
 	retryDelay    time.Duration
@@ -237,6 +240,14 @@ func bytesToUint16(data []byte) []uint16 {
 }
 
 func (mb *ModbusBackend) Read() (*InverterData, error) {
+	requestedAt := time.Now()
+	mb.readMu.Lock()
+	defer mb.readMu.Unlock()
+	// Coalesce overlapping scrapes without returning aged counters to the recorder.
+	if mb.lastData != nil && mb.lastRead.After(requestedAt) {
+		data := *mb.lastData
+		return &data, nil
+	}
 	mb.mu.Lock()
 	if mb.cachedFailure && time.Since(mb.lastFailure) < mb.retryDelay {
 		mb.mu.Unlock()
@@ -265,6 +276,9 @@ func (mb *ModbusBackend) Read() (*InverterData, error) {
 	data.Version = mb.version
 
 	mb.handleSuccess()
+	mb.lastRead = time.Now()
+	copy := data
+	mb.lastData = &copy
 	return &data, nil
 }
 
