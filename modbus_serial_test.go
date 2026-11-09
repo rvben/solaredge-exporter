@@ -17,7 +17,7 @@ func TestConcurrentModbusReadsAreSerialized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	var active, peak, requests atomic.Int32
 	var server sync.WaitGroup
 	done := make(chan struct{})
@@ -38,9 +38,12 @@ func TestConcurrentModbusReadsAreSerialized(t *testing.T) {
 			server.Add(1)
 			go func() {
 				defer server.Done()
-				defer conn.Close()
+				defer func() { _ = conn.Close() }()
 				defer active.Add(-1)
-				conn.SetDeadline(time.Now().Add(2 * time.Second))
+				if err := conn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+					t.Error(err)
+					return
+				}
 				request := make([]byte, 12)
 				if _, err := io.ReadFull(conn, request); err != nil {
 					return
@@ -50,7 +53,9 @@ func TestConcurrentModbusReadsAreSerialized(t *testing.T) {
 				copy(response, request[:4])
 				binary.BigEndian.PutUint16(response[4:6], uint16(len(response)-6))
 				response[6], response[7], response[8] = request[6], 3, 2*regInverterCount
-				conn.Write(response)
+				if _, err := conn.Write(response); err != nil {
+					t.Error(err)
+				}
 			}()
 		}
 	}()
@@ -69,7 +74,9 @@ func TestConcurrentModbusReadsAreSerialized(t *testing.T) {
 	}
 	close(start)
 	clients.Wait()
-	listener.Close()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
 	<-done
 	server.Wait()
 	if requests.Load() != 1 {
