@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.8](https://github.com/rvben/solaredge-exporter/compare/v0.3.7...v0.3.8) - 2026-11-09
+
+### Fixed
+
+- **modbus**: expose explicit local provenance without API fallback ([0c3f59d](https://github.com/rvben/solaredge-exporter/commit/0c3f59de361c1f79383a2662d60edcc9b2b23b3c))
+
 ## [0.3.7](https://github.com/rvben/solaredge-exporter/compare/v0.3.6...v0.3.7) - 2026-11-09
 
 ## [0.3.6](https://github.com/rvben/solaredge-exporter/compare/v0.3.5...v0.3.6) - 2026-11-09
