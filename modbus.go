@@ -311,6 +311,10 @@ func (mb *ModbusBackend) handleSuccess() {
 	mb.retryDelay = 0
 }
 
+// IsUsingFallback identifies a local-only backend to provenance-aware consumers.
+// This backend never substitutes cloud readings for local Modbus observations.
+func (mb *ModbusBackend) IsUsingFallback() bool { return false }
+
 func (mb *ModbusBackend) Close() error {
 	return nil
 }

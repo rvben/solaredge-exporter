@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Two HTTP scrapes must not open competing connections to the single-slot inverter.
@@ -74,13 +76,31 @@ func TestConcurrentModbusReadsAreSerialized(t *testing.T) {
 	}
 	close(start)
 	clients.Wait()
+	if requests.Load() != 1 {
+		t.Fatalf("concurrent upstream reads = %d, want one shared read", requests.Load())
+	}
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(NewCollector(backend, nil))
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundLocal := false
+	for _, family := range families {
+		if family.GetName() == "solaredge_fallback_active" {
+			foundLocal = len(family.Metric) == 1 && family.Metric[0].GetGauge().GetValue() == 0
+		}
+	}
+	if !foundLocal {
+		t.Fatal("Modbus-only scrape must explicitly identify local provenance")
+	}
 	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
 	<-done
 	server.Wait()
-	if requests.Load() != 1 {
-		t.Fatalf("upstream reads = %d, want one shared read", requests.Load())
+	if requests.Load() != 2 {
+		t.Fatalf("upstream reads = %d, want one shared read plus collector scrape", requests.Load())
 	}
 	if peak.Load() != 1 {
 		t.Fatalf("concurrent upstream connections = %d, want 1", peak.Load())
