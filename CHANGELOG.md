@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.6](https://github.com/rvben/solaredge-exporter/compare/v0.3.5...v0.3.6) - 2026-11-09
+
+### Fixed
+
+- **modbus**: coalesce concurrent inverter reads ([7c24c73](https://github.com/rvben/solaredge-exporter/commit/7c24c7352f72f8510f56479e14cc3bee85f5c43d))
+
 ## [0.3.5](https://github.com/rvben/solaredge-exporter/compare/v0.3.4...v0.3.5) - 2026-10-24
 
 ### Fixed
