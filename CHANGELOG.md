@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.9](https://github.com/rvben/solaredge-exporter/compare/v0.3.8...v0.3.9) - 2026-11-16
+
+### Fixed
+
+- **modbus**: add opt-in lifetime energy integrity checks ([bc783ed](https://github.com/rvben/solaredge-exporter/commit/bc783ed64eb1755f2657099e6a70fc10b347ca21))
+
 ## [0.3.8](https://github.com/rvben/solaredge-exporter/compare/v0.3.7...v0.3.8) - 2026-11-09
 
 ### Fixed
