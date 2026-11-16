@@ -211,6 +211,21 @@ make test
 make docker
 ```
 
+## Lifetime energy integrity checks
+
+Set `SE_COUNTER_MAX_POWER_W` (or `--counter-max-power-w`) to the inverter's
+rated AC output, for example `4000` for an SE4000H. This opt-in check rejects zero
+lifetime energy, decreases, and increases exceeding rated output over the elapsed
+time, with 25% headroom and two counter steps for quantization. Counter resolution
+must be no coarser than one minute of rated production. The default is `0`
+(disabled). Invalid counters are omitted and their raw energy registers logged; power and
+other telemetry remain available. Cached or cloud counters are never substituted
+by these checks. Normal readings recover immediately once an anchor is established.
+
+The watermark is held in memory. An actual meter reset requires verification and
+an exporter restart to establish a new baseline. Bootstrap requires two physically consistent nonzero observations, and omits
+the counter until they agree. These checks do not validate historical data.
+
 ## License
 
 MIT

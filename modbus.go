@@ -159,17 +159,23 @@ type ModbusBackend struct {
 	serial       string
 	version      string
 
-	readMu        sync.Mutex // serialize full transactions across concurrent HTTP scrapes
-	lastRead      time.Time
-	lastData      *InverterData
-	mu            sync.Mutex
-	lastFailure   time.Time
-	retryDelay    time.Duration
-	cachedFailure bool
-	wasReachable  bool
+	readMu             sync.Mutex // serialize full transactions across concurrent HTTP scrapes
+	lastRead           time.Time
+	lastData           *InverterData
+	counterMaxPowerW   int
+	counterNow         func() time.Time // nil uses wall time
+	energyHighWaterAt  time.Time
+	energyHighWater    float64
+	hasEnergyCandidate bool
+	hasEnergyHighWater bool
+	mu                 sync.Mutex
+	lastFailure        time.Time
+	retryDelay         time.Duration
+	cachedFailure      bool
+	wasReachable       bool
 }
 
-func NewModbusBackend(address string, deviceID byte, timeout time.Duration, logger *slog.Logger) (*ModbusBackend, error) {
+func NewModbusBackend(address string, deviceID byte, timeout time.Duration, logger *slog.Logger, counterMaxPowerW ...int) (*ModbusBackend, error) {
 	mb := &ModbusBackend{
 		address:      address,
 		deviceID:     deviceID,
@@ -178,6 +184,9 @@ func NewModbusBackend(address string, deviceID byte, timeout time.Duration, logg
 		wasReachable: true,
 	}
 
+	if len(counterMaxPowerW) > 0 {
+		mb.counterMaxPowerW = counterMaxPowerW[0]
+	}
 	client, handler, err := mb.connect()
 	if err != nil {
 		return nil, fmt.Errorf("connecting to inverter: %w", err)
@@ -270,6 +279,38 @@ func (mb *ModbusBackend) Read() (*InverterData, error) {
 
 	regs := bytesToUint16(results)
 	data := parseInverterBlock(regs)
+	// Keep other telemetry available when the counter is untrustworthy. An
+	// omitted counter also prevents fallback from substituting cloud energy.
+	if mb.counterMaxPowerW > 0 && !math.IsNaN(data.EnergyTotal) {
+		now := time.Now()
+		if mb.counterNow != nil {
+			now = mb.counterNow()
+		}
+		stepWh := math.Pow(10, float64(int16(regs[offEnergySF])))
+		eligible := !math.IsInf(data.EnergyTotal, 0) && data.EnergyTotal > 0 && stepWh <= float64(mb.counterMaxPowerW)/60
+		consistent := eligible
+		if mb.hasEnergyCandidate {
+			limit := float64(mb.counterMaxPowerW)*math.Max(0, now.Sub(mb.energyHighWaterAt).Hours())*1.25 + 2*stepWh
+			delta := data.EnergyTotal - mb.energyHighWater
+			consistent = consistent && delta >= 0 && delta <= limit
+		}
+		if !consistent || !mb.hasEnergyCandidate {
+			mb.logger.Warn("omitting unverified inverter energy counter",
+				"previous_wh", mb.energyHighWater, "current_wh", data.EnergyTotal,
+				"raw_hi", regs[offEnergyHi], "raw_lo", regs[offEnergyLo], "scale", int16(regs[offEnergySF]))
+			// Bootstrap needs two physically consistent readings. A bad first
+			// anchor cannot poison all future observations. Once established,
+			// the anchor never moves backwards without an operator restart.
+			if !mb.hasEnergyHighWater && eligible {
+				mb.energyHighWater, mb.energyHighWaterAt = data.EnergyTotal, now
+				mb.hasEnergyCandidate = true
+			}
+			data.EnergyTotal = math.NaN()
+		} else {
+			mb.energyHighWater, mb.energyHighWaterAt = data.EnergyTotal, now
+			mb.hasEnergyHighWater = true
+		}
+	}
 	data.Manufacturer = mb.manufacturer
 	data.Model = mb.model
 	data.Serial = mb.serial

@@ -60,6 +60,7 @@ func main() {
 	// Modbus flags (env vars used as defaults, flags take precedence)
 	modbusAddr := flag.String("modbus-address", envOrDefault("SE_MODBUS_ADDRESS", ""), "Modbus TCP address (host:port)")
 	modbusDevID := flag.Int("modbus-device-id", envOrDefaultInt("SE_MODBUS_DEVICE_ID", 1), "Modbus device ID")
+	counterMaxPowerW := flag.Int("counter-max-power-w", envOrDefaultInt("SE_COUNTER_MAX_POWER_W", 0), "Opt-in lifetime counter integrity checks using inverter rated AC watts (0 disables)")
 	modbusTimeout := flag.Duration("modbus-timeout", envOrDefaultDuration("SE_MODBUS_TIMEOUT", 3*time.Second), "Modbus read timeout")
 
 	// API flags
@@ -68,6 +69,10 @@ func main() {
 	apiInterval := flag.Duration("api-interval", envOrDefaultDuration("SE_API_INTERVAL", 5*time.Minute), "API polling interval")
 
 	flag.Parse()
+	if *counterMaxPowerW < 0 {
+		slog.Error("counter-max-power-w must be nonnegative")
+		os.Exit(1)
+	}
 
 	// Setup logging
 	var level slog.Level
@@ -98,7 +103,7 @@ func main() {
 			logger.Error("--modbus-address is required for modbus backend")
 			os.Exit(1)
 		}
-		backend, err = NewModbusBackend(*modbusAddr, byte(*modbusDevID), *modbusTimeout, logger)
+		backend, err = NewModbusBackend(*modbusAddr, byte(*modbusDevID), *modbusTimeout, logger, *counterMaxPowerW)
 	case "api":
 		if *apiKey == "" || *siteID == "" {
 			logger.Error("--api-key and --site-id are required for api backend")
@@ -115,7 +120,7 @@ func main() {
 			os.Exit(1)
 		}
 		var mb *ModbusBackend
-		mb, err = NewModbusBackend(*modbusAddr, byte(*modbusDevID), *modbusTimeout, logger)
+		mb, err = NewModbusBackend(*modbusAddr, byte(*modbusDevID), *modbusTimeout, logger, *counterMaxPowerW)
 		if err != nil {
 			logger.Error("failed to initialize modbus backend", "error", err)
 			os.Exit(1)
@@ -192,8 +197,8 @@ func main() {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-				logger.Error("shutdown error", "error", err)
-			}
+			logger.Error("shutdown error", "error", err)
+		}
 	}()
 
 	logger.Info("listening", "address", *listenFlag)
